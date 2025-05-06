@@ -1,20 +1,31 @@
 const express = require('express');
-const app = express(); // تأكد من تعريف `app` أولاً
-const sqlite = require("sqlite3");
-const asyncHandler = require("express-async-handler");
+const app = express();
+const mysql = require('mysql2');
+const asyncHandler = require('express-async-handler');
 const cors = require('cors');
 
-const port = 4000; // استخدام منفذ مختلف عن واجهة React
+const port = 4000; 
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
 
-// إنشاء قاعدة البيانات والجداول
-const db = new sqlite.Database('ip.db');
-db.run(`CREATE TABLE IF NOT EXISTS tabqa (ip INTEGER UNIQUE NOT NULL, name TEXT NOT NULL)`);
-db.run(`CREATE TABLE IF NOT EXISTS rqaa (ip INTEGER UNIQUE NOT NULL, name TEXT NOT NULL)`);
-db.run(`CREATE TABLE IF NOT EXISTS kobani (ip INTEGER UNIQUE NOT NULL, name TEXT NOT NULL)`);
+// إعداد الاتصال بقاعدة البيانات
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root', // اسم المستخدم الذي أنشأته في MariaDB
+    password: '', // كلمة المرور (إذا كانت فارغة)
+    database: 'ip_database' // اسم قاعدة البيانات
+});
+
+// اختبار الاتصال بقاعدة البيانات
+db.connect((err) => {
+    if (err) {
+        console.error('Error connecting to the database: ', err);
+        return;
+    }
+    console.log('Connected to the database');
+});
 
 // واجهة اختبارية
 app.get("/", (req, res) => {
@@ -29,7 +40,7 @@ app.get("/", (req, res) => {
             return res.status(400).send("IP and name are required.");
         }
 
-        db.run(`INSERT INTO ${table} (ip, name) VALUES (?, ?)`, [ip, name], function (err) {
+        db.query(`INSERT INTO ${table} (ip, name) VALUES (?, ?)`, [ip, name], function (err, results) {
             if (err) {
                 console.error(err);
                 return res.status(500).send("Database error");
@@ -50,13 +61,12 @@ async function searchByIps(ips) {
         const query = `SELECT name FROM ${table} WHERE ip IN (${placeholders})`;
 
         const names = await new Promise((resolve, reject) => {
-            db.all(query, ips, (err, rows) => {
+            db.query(query, ips, (err, rows) => {
                 if (err) reject(err);
                 else resolve(rows.map(row => row.name));
             });
         });
 
-        // فقط نضيف الجدول إذا كانت فيه بيانات
         if (names.length > 0) {
             results.push({ table, names });
         }
